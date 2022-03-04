@@ -14,7 +14,7 @@ export const getPosts = async (req, res) => {
 export const createPost = async (req, res) => {
     const post = req.body;
 
-    const newPost = new PostMessage(post);
+    const newPost = new PostMessage({...post, creator: req.userId, createdAt: new Date().toISOString() });
     try {
         await newPost.save();
         res.status(201).json(newPost);
@@ -56,20 +56,35 @@ export const deletePost = async (req, res) => {
 
 
 export const likePost = async (req, res) => {
-    const { id: _id } = req.params;
+    const { id } = req.params;
     const post = req.body;
-    if (!mongoose.Types.ObjectId.isValid(_id)) {
-        return res.status(404).send("No post with that id");
+
+    // check whether pass the middleware or not 
+    if (!req.userId) {
+        return res.json({ message: "Unauthenticated" });
     }
 
+    // if yes, check whether existing thise id
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(404).send("No post with that id");
+    }
     try{
-        const post = await PostMessage.findById(_id);
-        const updatedPost = await PostMessage.findByIdAndUpdate(_id, { likeCount: post.likeCount+1}, { new: true});
-        res.json(updatedPost);
+        //  find this id record
+        const post = await PostMessage.findById(id);
+        const index = post.likes.findIndex((id) => id ===String(req.userId));
+        if (index === -1) {
+            // like the post
+            post.likes.push(req.userId);
+          } else {
+            // dislike the post
+            post.likes = post.likes.filter((id) => id !== String(req.userId));
+        }
+        const updatedPost = await PostMessage.findByIdAndUpdate(id, post, { new: true });
+        res.status(200).json(updatedPost)
     } catch(error) {
         res.status(400).json({ message: error.message});
     }
     
 }
 
-
+ 
